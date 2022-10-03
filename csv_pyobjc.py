@@ -3,6 +3,7 @@ import win32gui
 
 # CSV形式でLOG保存関数
 #引数(AUDIO_FILE_NAME:nameFormat【2021-01-01-10.10.55】, ResultList:認識結果, num:認識結果文字数, saveFileName:保存するファイルの名前, deviceNUM :MIXER=0,MIC=1)
+
 class csv_pyobjc():
     def __init__(self):
         print("csv_pyobjc")
@@ -25,7 +26,7 @@ class csv_pyobjc():
                 CR0Len = num
 
         # w = w.writerow([month+"/"+day,hh+":"+mm+":"+ss,audioNameR,CR0,CR,CR0Len,audioNameL,CL0,CL,CL0Len, cut_time,"NULL",progressTime])
-        w = w.writerow([month+"/"+day, hh+":"+mm+":"+ss, audioNameR, CR0, CR,confidence, CR0Len, deviceNUM,self.get_winObjct()])
+        w = w.writerow([month+"/"+day, hh+":"+mm+":"+ss, audioNameR, CR, confidence, CR0Len, deviceNUM,self.get_winObjct()])
         file.close()
         print("addwrite")
 

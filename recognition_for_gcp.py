@@ -44,13 +44,15 @@ class _MicrophoneStream(object):
         # Save Audio Buff
         self._frames = []
         self._save_audio = save_audio
+        self._DEVICE_NAME = "none"
 
     def __enter__(self):
         self._audio_interface = pyaudio.PyAudio()
         # 接続されたデバイスの表示
         for x in range(0, self._audio_interface.get_device_count()):
             if x==self._DEVICE_INDEX:
-                print("接続デバイス【index"+str(x)+":"+self._audio_interface.get_device_info_by_index(x).get("name")+"】")
+                self._DEVICE_NAME ="接続デバイス【index"+str(x)+":"+self._audio_interface.get_device_info_by_index(x).get("name")+"】"
+                print(self._DEVICE_NAME)
         self._audio_stream = self._audio_interface.open(
             format=pyaudio.paInt16,
             # The API currently only supports 1-channel (mono) audio
@@ -140,11 +142,17 @@ class _MicrophoneStream(object):
         print("【オーディオデバイス一覧】")
         for x in range(0, audio.get_device_count()):
             print("index"+str(x)+":"+audio.get_device_info_by_index(x).get("name"))
+    
+    def get_connected_device(self):# 音声デバイスをgetする
+        return self._DEVICE_NAME 
+
+
 
 class Listen_print(object):
     def __init__(self, deviceindex, deviceNAME, deviceNumber, audio_dir_path, log_dir_path, SAVE_AUDIO):
         self._DEVICE_INDEX =  deviceindex
         self._DEVICENAME_AND_NUMBER = (deviceNAME, deviceNumber)
+        self.CONNECTED_DEVICE_NAME =""
         # 確定した認識結果
         self._return_result = "【スタートボタンを押すと認識がはじまります】"
         # 認識を開始した時刻
@@ -196,7 +204,10 @@ class Listen_print(object):
                     speech.StreamingRecognizeRequest(audio_content=content)
                     for content in audio_generator
                 )
-
+                self._set_connected_device(str(stream.get_connected_device()))
+                # self.CONNECTED_DEVICE_NAME=str(stream.get_connected_device())
+                # print("safa"+self.CONNECTED_DEVICE_NAME)
+                # print("safaaa"+str(stream.get_connected_device()))
                 try:
                     # "認識が開始された瞬間1回だけ実行される To "for response in responses: 
                     responses = client.streaming_recognize(config=_streaming_config, requests=requests)
@@ -323,7 +334,13 @@ class Listen_print(object):
         return self._monoChrCount
     def set_stt_status(self, bool):#
         self.stt_status = bool
-    
+    def set_stt_device_index(self, index):#
+        self._DEVICE_INDEX =  int(index)
+    def get_connected_device(self):#
+        return self.CONNECTED_DEVICE_NAME
+    def _set_connected_device(self, name):
+        self.CONNECTED_DEVICE_NAME=name
+        
 # if __name__ == "__main__":
     # Listen_print()は 以下のどちらかを使用
         # deviceNAMEが"mixer"ならdeviceNumber = 0

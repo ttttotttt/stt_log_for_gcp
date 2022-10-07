@@ -172,6 +172,9 @@ class Listen_print(object):
         self._save_audio = SAVE_AUDIO
         
         log_file_path = self._LOG_DIR_PATH + datetime.datetime.now().strftime('%Y-%m-%d')+".csv"
+        
+        b=_MicrophoneStream(RATE, CHUNK, 1, "AUDIO_FILE_PATH", False) 
+        b.print_connected_deviceList()
 
     
     def start_recognize(self):

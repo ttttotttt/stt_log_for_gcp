@@ -5,7 +5,6 @@ import tkinter
 from tkinter import ttk, messagebox
 from tkinter.constants import FALSE
 
-
 import time
 import datetime
 
@@ -13,19 +12,22 @@ from sqlalchemy import null
 # import schedule
 import queue
 import os
+import logging
 
 import recognition_for_gcp as stt
 import label_object as lo
+import csv_pyobjc
 
-MIC_INDEX = 2#USER側の入力デバイスインデックス
-MIXER_INDEX = 1#PC側の入力デバイスインデックス
+MIC_INDEX = 1#USER側の入力デバイスインデックス
+MIXER_INDEX = 2#PC側の入力デバイスインデックス
 
-SAVE_AUDIO = True #音源を保存するかしないか（ストレージ対策）
+SAVE_AUDIO = False #音源を保存するかしないか（ストレージ対策）
 DIR_NAME = "speech_to_text_2121040"
 AUDIO_PATH = DIR_NAME+"/AUDIO_FILE/"
 day = datetime.datetime.now().strftime('%Y-%m-%d')+"/"
 AUDIO_DIR_PATH = DIR_NAME+"/AUDIO_FILE/"+day#音源を保存する場所
 LOG_DIR_PATH = DIR_NAME+"/LOG_FILE/"#ログを保存する場所
+SETTING_PATH = DIR_NAME+"/setting.txt"
 
 # ディレクトリが存在しない場合、ディレクトリを作成する
 if not os.path.exists(DIR_NAME):
@@ -36,7 +38,16 @@ if not os.path.exists(LOG_DIR_PATH):
     os.makedirs(LOG_DIR_PATH)
 if not os.path.exists(AUDIO_DIR_PATH):
     os.makedirs(AUDIO_DIR_PATH)
+if not os.path.exists(SETTING_PATH):
+    # ファイルが存在しなければ作成
+    with open(SETTING_PATH, mode='w') as f:
+        f.write(str(MIC_INDEX)+'\n'+str(MIXER_INDEX))
+    f.close()
 
+co = csv_pyobjc.csv_pyobjc()
+a = co.readCsv(SETTING_PATH)
+MIC_INDEX = a[0]
+MIXER_INDEX = a[1]
 
 ttsMIC = stt.Listen_print(MIC_INDEX,"USER", 1,AUDIO_DIR_PATH,LOG_DIR_PATH,SAVE_AUDIO)
 ttsMIXER = stt.Listen_print(MIXER_INDEX,"PC",0,AUDIO_DIR_PATH,LOG_DIR_PATH,SAVE_AUDIO)
@@ -49,7 +60,7 @@ class Display_result():
 
         self.root = tkinter.Tk()
         ww = self.root.winfo_screenwidth()
-        self.label_window_width = ww/7                              #ラベルの幅
+        self.label_window_width = ww/5                            #ラベルの幅
         print(self.label_window_width)
 
         self.wh = self.root.winfo_screenheight()
@@ -85,8 +96,8 @@ class Display_result():
 
         self.label_pack = []
 
-        self.micob = lo.label_ob(self.root,"start_for", 5, self.mic_label_place,self.label_window_width,"black",'#fafad2')
-        self.mixob = lo.label_ob(self.root,"start_for_mix", 5,self.mix_label_place,self.label_window_width,'#FFFAFA',"darkcyan")
+        self.micob = lo.label_ob(self.root,"start_for", 12, self.mic_label_place,self.label_window_width,"black",'#fafad2')
+        self.mixob = lo.label_ob(self.root,"start_for_mix", 12,self.mix_label_place,self.label_window_width,'#FFFAFA',"darkcyan")
         self.comic=self.comix=0  
         # self.label_pack.append(self.micob )
         # self.label_pack.append(self.mixob )
@@ -128,20 +139,20 @@ class Display_result():
         # self.studentNum.pack()
         
         # ラベル
-        lbl = tkinter.Label(self.option_window,text='マイクのデバイスインデックス')
+        lbl = tkinter.Label(self.option_window,text='USERのデバイスインデックス')
         self.label_m=tkinter.Label(self.option_window,text="接続デバイス")
         
         self.index_mic_box = tkinter.Entry(self.option_window,width=20)
-        self.index_mic_box.insert(0,"1")
+        self.index_mic_box.insert(0,str(MIC_INDEX))
         
         lbl.pack()
         self.index_mic_box.pack()
         self.label_m.pack()
 
         # ラベル
-        lbl = tkinter.Label(self.option_window,text='サウンドミキサーのデバイスインデックス')
+        lbl = tkinter.Label(self.option_window,text='PCのデバイスインデックス')
         self.txt = tkinter.Entry(self.option_window,width=20)
-        self.txt.insert(0,"2")
+        self.txt.insert(0,str(MIXER_INDEX))
 
         self.text_mx = tkinter.StringVar()
         self.text_mx.set("a")
@@ -154,8 +165,6 @@ class Display_result():
         applybtn = ttk.Button(self.option_window, text="Stop", command=self.stop_btn)  
         applybtn.pack(side=tkinter.BOTTOM,anchor=tkinter.W)
         btn.pack(side=tkinter.BOTTOM,anchor=tkinter.W)
-
-
         
         # スケールバー～ラベル位置（オプションをいくつか設定）
         self.scale_var = tkinter.IntVar()
@@ -238,21 +247,20 @@ class Display_result():
         self.scale_alfa.set(event)
         self.root.attributes("-alpha",self.scale_alfa.get())
      
+    # リアルタイムに認識結果を可視化させる処理 並列処理されているrecognition_for_gcp.pyから認識に値を取得する
     def update_stt_result(self):
         # tmp = str(ttsMIC.get_connected_device())
         # self.label_m.config(text = tmp)
         # tmp = ttsMIXER.get_connected_device()
         # self.label_mx.config(text =tmp)
-
+        
+        #リアルタイムに認識結果を可視化させる
         tmp = ttsMIC.get_progress_result()
-        # self.mic_progres.set(tmp)
         self.micob.set_text_value(tmp)
-
         tmp = ttsMIXER.get_progress_result()
-        # self.mixer_progres.set(tmp)
         self.mixob.set_text_value(tmp)
 
-        #確定した認識結果を追加していくラベル
+        #確定した認識結果を追加していくラベル　現在は使用していない
         def display_result_on_textbox(ttsObject, text_color,backcolor):
             mxla=self.mixob.get()
             mxhh = mxla[2].winfo_height()
@@ -275,47 +283,47 @@ class Display_result():
             dd.pp(0,mxy+mxhh)
             self.label_pack.append(dd)
             
+        #リアルタイムに認識していた結果が確定した瞬間処理を行う
         if(ttsMIXER.get_condition()):
             self.comix+=1
-            # self.mixerttmp = self._data[ttsMIXER.get_deviceName_or_number(1)]
             self.mixerttmp = ttsMIXER.get_chrCount()
-            print(self.mixerttmp)
             # display_result_on_textbox(ttsMIXER,'#FFFAFA',"darkcyan") 
-            ttsMIXER.init_object()
-            print(str(self.comic)+str(self.comix)+str(threading.active_count))
 
         if(ttsMIC.get_condition()):
             self.comic+=1
-            # self.mictmp = self._data[ttsMIC.get_deviceName_or_number(1)]
             self.mixerttmp = ttsMIC.get_chrCount()
             # self.add_label()
-            # display_result_on_textbox(ttsMIC,"black",'#fafad2')   
-            ttsMIC.init_object()
+            # display_result_on_textbox(ttsMIC,"black",'#fafad2') # 今回はスルー過去ラベルを可視化していく
             # schedule.run_pending()
-
-        self.root.after(10, self.update_stt_result)
-
+        
+        # -- def update_stt_result(self)-- 処理をもう一度する．ループ的な役割
+        self.root.after(ms=10, func=self.update_stt_result)
+    
+    # ストップボタンを押したときの処理 -> プログラムを終了させる
     def stop_btn(self):
         ttsMIXER.set_stt_status(False)
         ttsMIC.set_stt_status(False)
         self.option_window.destroy()
         self.root.destroy()
-
+    
+    # スタートボタンを押したときの処理 -> 設定されたデバイスで認識を開始する
     def start_btn(self):
         # テキストボックス内の値を取得
-        index=self.index_mic_box.get()
-        ttsMIC.set_stt_device_index(index)
-        index=self.txt.get()
-        ttsMIXER.set_stt_device_index(index)
-        
+        index1=self.index_mic_box.get()
+        ttsMIC.set_stt_device_index(index1)
+        index2=self.txt.get()
+        ttsMIXER.set_stt_device_index(index2)
+        with open(SETTING_PATH, mode='w') as f:
+            f.write(str(index1)+'\n'+str(index2))
+            f.close()
         # sttの初期化
-        ttsMIC.init_object()
-        ttsMIXER.init_object()
+        ttsMIC._init_object()
+        ttsMIXER._init_object()
 
-        t1 = threading.Thread(target=ttsMIC.start_recognize, daemon=True)
+        t1 = threading.Thread(name='USER(MIC)_RECOGNIZE_THREAD', target=ttsMIC.start_recognize, daemon=True)
         t1.start()
         time.sleep(5)#これを入れないとpysimpleGUIのWindowがクラッシュする
-        t2 = threading.Thread(target=ttsMIXER.start_recognize, daemon=True)
+        t2 = threading.Thread(name='PC(MIXER)_RECOGNIZE_THREAD', target=ttsMIXER.start_recognize, daemon=True)
         t2.start()
         time.sleep(5)
         

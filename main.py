@@ -21,7 +21,7 @@ import csv_pyobjc
 MIC_INDEX = 1#USER側の入力デバイスインデックス
 MIXER_INDEX = 2#PC側の入力デバイスインデックス
 
-SAVE_AUDIO = False #音源を保存するかしないか（ストレージ対策）
+SAVE_AUDIO = True #音源を保存するかしないか（ストレージ対策）
 DIR_NAME = "speech_to_text_2121040"
 AUDIO_PATH = DIR_NAME+"/AUDIO_FILE/"
 day = datetime.datetime.now().strftime('%Y-%m-%d')+"/"

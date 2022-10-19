@@ -1,5 +1,6 @@
 from __future__ import division
 import datetime
+from pyexpat import model
 
 import re
 import sys
@@ -13,6 +14,7 @@ import queue
 import wave
 from pykakasi import kakasi
 import csv_pyobjc
+import logging
 
 # DEVICE_INDEX  = 2
 # 使用可能なデバイスインデックスがプリントする方法
@@ -46,6 +48,7 @@ class _MicrophoneStream(object):
         self._save_audio = save_audio
         self._DEVICE_NAME = "none"
 
+    # _MicrophoneStream開始したら実行される:default
     def __enter__(self):
         self._audio_interface = pyaudio.PyAudio()
         # 接続されたデバイスの表示
@@ -73,8 +76,8 @@ class _MicrophoneStream(object):
 
         return self
 
+    #_MicrophoneStream が終了したら実行される:default
     def __exit__(self, type, value, traceback):
-        # マイクロフォンストリーム終了したら実行される
         self._audio_stream.stop_stream()
         self._audio_stream.close()
         self.closed = True
@@ -84,24 +87,25 @@ class _MicrophoneStream(object):
         self._audio_interface.terminate()
         def _save_audio():
             # save wav failes
-            print("Start Save Audio: "+self._WAVE_OUTPUT_FILENAME)
+            logging.debug('_MicrophoneStream %s', "Start Save Audio: "+self._WAVE_OUTPUT_FILENAME)
             wf = wave.open(self._WAVE_OUTPUT_FILENAME, 'wb')
             wf.setnchannels(1)
             wf.setsampwidth(self._audio_interface.get_sample_size(FORMAT))
             wf.setframerate(RATE)
             wf.writeframes(b''.join(self._frames))
             wf.close()
-            print("End Save Audio")
+            logging.debug('_MicrophoneStream %s', "End Save Audio")
         if(self._save_audio):
             _save_audio()
             # t1 = threading.Thread(target=_save_audio, daemon=True)
             # t1.start()
             
+    # :default
     def _fill_buffer(self, in_data, frame_count, time_info, status_flags):
         """Continuously collect data from the audio stream, into the buffer."""
         self._buff.put(in_data)
         return None, pyaudio.paContinue
-
+    # :default
     def generator(self):
         
         while not self.closed:
@@ -127,26 +131,28 @@ class _MicrophoneStream(object):
 
             yield b"".join(data)
     
+    # 音声の保存先を指定:create
     def _set_audio_file_path(self, file_name):
         self._WAVE_OUTPUT_FILENAME = file_name
-
+    
+    # 発話前の無音部分をカットしておく:create
     def clear_audio_file(self):
-        # 発話前の無音部分をカットしておく
+        
         if(len(self._frames)-7>0):
             del self._frames[:len(self._frames)-7]
         else:
             self._frames.clear()
-        
-    def print_connected_deviceList(self):# 音声デバイスを一覧表示する
+    
+    # 音声に関係するデバイスを一覧表示する（必ずしもinput側がでるとは限らない）:create
+    def print_connected_deviceList(self):# 
         audio = pyaudio.PyAudio()
         print("【オーディオデバイス一覧】")
         for x in range(0, audio.get_device_count()):
             print("index"+str(x)+":"+audio.get_device_info_by_index(x).get("name"))
     
-    def get_connected_device(self):# 音声デバイスをgetする
+    # _MicrophoneStreamに接続している音声デバイスを取得する:create
+    def get_connected_device(self):
         return self._DEVICE_NAME 
-
-
 
 class Listen_print(object):
     def __init__(self, deviceindex, deviceNAME, deviceNumber, audio_dir_path, log_dir_path, SAVE_AUDIO):
@@ -158,25 +164,23 @@ class Listen_print(object):
         # 認識を開始した時刻
         self._date = "00/00/00"
         # 認識途中の結果
-        self._progress_result = "【スタートボタンを押すと認識がはじまりますああああああああああああああああああああああ】"
+        self._progress_result = "【スタートボタンを押すと認識がはじまります】"
         # 確定した認識結果の総テキスト量
         self._chrCount = 0
         # 認識途中の総テキスト量
         self._monoChrCount = 0  
-        # ？？？
+        # 認識が リアルタイムに認識中:false OR 認識が確定した瞬間:true
         self.condition = False 
         # 認識が確定する度にsstを終了させるフラグ
         self.stt_status  = True #sstのwhile抜ける用
         self._AUDIO_DIR_PATH = audio_dir_path
         self._LOG_DIR_PATH = log_dir_path
         self._save_audio = SAVE_AUDIO
-        
+        if(deviceNAME=="PC"):
+            b=_MicrophoneStream(RATE, CHUNK, 1, "AUDIO_FILE_PATH", False) 
+            b.print_connected_deviceList()       
         log_file_path = self._LOG_DIR_PATH + datetime.datetime.now().strftime('%Y-%m-%d')+".csv"
-        
-        b=_MicrophoneStream(RATE, CHUNK, 1, "AUDIO_FILE_PATH", False) 
-        b.print_connected_deviceList()
-
-    
+ 
     def start_recognize(self):
         # See http://g.co/cloud/speech/docs/languages
         # for a list of supported languages.
@@ -185,10 +189,22 @@ class Listen_print(object):
         language_code = "ja-JP" # a BCP-47 language tag "en-US"
 
         client = speech.SpeechClient()
+        # https://cloud.google.com/speech-to-text/docs/reference/rest/v1/RecognitionConfig
+        if(self._DEVICENAME_AND_NUMBER[0]=="PC"):
+            MODEL = "latest_long"
+            print("model:"+MODEL)
+            # 日本語対応なし -> vido
+        else:
+            MODEL = "default"
+            print("model:"+MODEL)
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=RATE,
             language_code=language_code,
+            # enableWordTimeOffsets = True,
+            model = MODEL,
+    
+            
         )
 
         _streaming_config = speech.StreamingRecognitionConfig(
@@ -200,6 +216,7 @@ class Listen_print(object):
         AUDIO_FILE_PATH = self._AUDIO_DIR_PATH + AUDIO_FILE_NAME
         
         while True:
+            # 認識待機状態の時一度だけ実行される
             with _MicrophoneStream(RATE, CHUNK, self._DEVICE_INDEX, AUDIO_FILE_PATH, self._save_audio) as stream:
                 num_chars_printed = 0
                 audio_generator = stream.generator()# 
@@ -207,9 +224,7 @@ class Listen_print(object):
                     speech.StreamingRecognizeRequest(audio_content=content)
                     for content in audio_generator
                 )
-                self._set_connected_device(str(stream.get_connected_device()))
-                # self.CONNECTED_DEVICE_NAME=str(stream.get_connected_device())
-                # print("safa"+self.CONNECTED_DEVICE_NAME)
+                print("..."+self._DEVICENAME_AND_NUMBER[0]+" 認識待機中")
                 # print("safaaa"+str(stream.get_connected_device()))
                 try:
                     # "認識が開始された瞬間1回だけ実行される To "for response in responses: 
@@ -241,7 +256,7 @@ class Listen_print(object):
                         confidence = result.alternatives[0].confidence
                         overwrite_chars = "*" * (num_chars_printed - len(transcript))
 
-                        if not result.is_final:# リアルタイムでの認識中の処理
+                        if not result.is_final: # リアルタイムでの認識中の処理:is_final = False
                             # sys.stdout.write(transcript + overwrite_chars + "\r")
                             # sys.stdout.flush()
                             num_chars_printed = len(transcript)                                        
@@ -257,11 +272,10 @@ class Listen_print(object):
                                 self._chrCount += self._monoChrCount-tmp
                                 tmp = self._monoChrCount
 
-                        else:
-                            # 認識が確定した瞬間一度だけ実行される:is_final = True
+                        else:# 認識が確定した瞬間一度だけ実行される:is_final = True
                             # print(result)
                             self.condition = True
-                            print("確定認識結果："+transcript + overwrite_chars)
+                            print(self._DEVICENAME_AND_NUMBER[0]+":確定認識結果："+transcript + overwrite_chars)
                             self._return_result = transcript + overwrite_chars
                             self._progress_result = transcript + overwrite_chars
                             self._chrCount += self._monoChrCount-tmp                      
@@ -274,23 +288,29 @@ class Listen_print(object):
                                                     
                             # filename = LOG_DIRECTORY+self.studentNum.get()+datetime.datetime.now().strftime('%Y-%m-%d')+'log.csv'
                             log_file_path = self._LOG_DIR_PATH + datetime.datetime.now().strftime('%Y-%m-%d')+".csv"
-                            # CSVファイル形式でログの保存
+                            # CSVファイル形式で確定した認識結果などログの保存
                             co.addwriteCsvTwoContents(AUDIO_FILE_NAME, self._return_result, num, log_file_path, confidence, self.get_deviceName_or_number(0))
-                            break
                             if re.search(r"\b(exit|quit)\b", transcript, re.I):
                                 print("Exiting..")
                                 break
+                            # breakすることで一度"for分をbresk _MicrophoneStream()"を閉じて音声を保存　Whileで認識を再開する
+                            self._init_object()
+                            break                            
                         if (self.stt_status==False):
                             break
-                            num_chars_printed = 0        
+                            num_chars_printed = 0
+                except TimeoutError as e:
+                    print(str(e))
                 except BaseException as e:
                     print("Exception occurred - {}".format(str(e)))
+                    # print("3分間無音の状態だったため認識エンジンをリセットします")
                     AUDIO_FILE_PATH = self._AUDIO_DIR_PATH+AUDIO_FILE_NAME
                     stream._set_audio_file_path(AUDIO_FILE_PATH)
                     self._return_result = ""
                     self._progress_result = ""
-                    # それまでの音声ストリームを削除
-                    stream.clear_audio_file()
+                    self._init_object()
+                    # 待機時間が305sを超えて無音のまますぎたため，それまでの音声ストリームを削除
+                    # stream.clear_audio_file()
             #認識が停止された
             if (self.stt_status==False):
                 self._return_result = "【☆スタートボタンを押すと認識がはじまります】"
@@ -306,7 +326,7 @@ class Listen_print(object):
                 # 認識文字数を保存
                 self._monoChrCount = len(conv.do(transcript))
                 break
-    def init_object(self):
+    def _init_object(self):
         # self._monoChrCount = 0
         self._progress_result = "【・・・】"
         # self._return_result = "【☆☆はじまり】"
@@ -344,15 +364,14 @@ class Listen_print(object):
     def _set_connected_device(self, name):
         self.CONNECTED_DEVICE_NAME=name
         
-# if __name__ == "__main__":
+if __name__ == "__main__":
     # Listen_print()は 以下のどちらかを使用
         # deviceNAMEが"mixer"ならdeviceNumber = 0
         # deviceNAMEが"mic"ならdeviceNumber = 1
-    # deviceindex=1
     # 使用可能なデバイスの表示するには以下2行のコメントアウトを消す
-    # b=_MicrophoneStream(RATE, CHUNK, device_index = DEVICE_INDEX)
-    # b.print_connected_deviceList()
-    # a = Listen_print(deviceindex = DEVICE_INDEX , deviceNAME = "deviceNAME", deviceNumber = 0)
+    b=_MicrophoneStream(RATE, CHUNK, 1, "AUDIO_FILE_PATH", False) 
+    b.print_connected_deviceList()
+    # a = Listen_print(deviceindex=15, deviceNAME="mix", deviceNumber=0, audio_dir_path="", log_dir_path="", SAVE_AUDIO=False)
     # a.start_recognize()
 
     

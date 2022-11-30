@@ -6,7 +6,7 @@ import re
 import sys
 
 from google.cloud import speech_v1 as speech
-
+# from google.cloud import speech_v1 storage
 # from google.cloud import speech
 
 import pyaudio
@@ -47,6 +47,9 @@ class _MicrophoneStream(object):
         self._frames = []
         self._save_audio = save_audio
         self._DEVICE_NAME = "none"
+
+        self.USERINDEX = 0
+        self.PCINDEX = 0
 
     # _MicrophoneStream開始したら実行される:default
     def __enter__(self):
@@ -148,8 +151,20 @@ class _MicrophoneStream(object):
         audio = pyaudio.PyAudio()
         print("【オーディオデバイス一覧】")
         for x in range(0, audio.get_device_count()):
-            print("index"+str(x)+":"+audio.get_device_info_by_index(x).get("name"))
-    
+            devicename = audio.get_device_info_by_index(x).get("name")  
+            
+            if("VoiceMeeter Aux Output (VB-Audi"==devicename):
+                print("☆PCインデックス"+str(x)+":"+devicename)
+                self.USERINDEX = int(x)
+                
+            elif("VoiceMeeter Output (VB-Audio Vo"==devicename):
+                print("☆USERインデックス"+str(x)+":"+devicename)
+                self.PCINDEX = int(x)
+                
+            else:
+                print("index"+str(x)+":"+devicename )
+                
+
     # _MicrophoneStreamに接続している音声デバイスを取得する:create
     def get_connected_device(self):
         return self._DEVICE_NAME 
@@ -176,9 +191,14 @@ class Listen_print(object):
         self._AUDIO_DIR_PATH = audio_dir_path
         self._LOG_DIR_PATH = log_dir_path
         self._save_audio = SAVE_AUDIO
+        self.USERINDEX = 0
+        self.PCINDEX = 0
         if(deviceNAME=="PC"):
             b=_MicrophoneStream(RATE, CHUNK, 1, "AUDIO_FILE_PATH", False) 
-            b.print_connected_deviceList()       
+            b.print_connected_deviceList()
+            self.USERINDEX = b.USERINDEX 
+            self.PCINDEX = b.PCINDEX
+         
         log_file_path = self._LOG_DIR_PATH + datetime.datetime.now().strftime('%Y-%m-%d')+".csv"
  
     def start_recognize(self):
@@ -190,21 +210,20 @@ class Listen_print(object):
 
         client = speech.SpeechClient()
         # https://cloud.google.com/speech-to-text/docs/reference/rest/v1/RecognitionConfig
-        if(self._DEVICENAME_AND_NUMBER[0]=="PC"):
-            MODEL = "latest_long"
-            print("model:"+MODEL)
-            # 日本語対応なし -> vido
-        else:
-            MODEL = "default"
-            print("model:"+MODEL)
+        # if(self._DEVICENAME_AND_NUMBER[0]=="PC"):
+        #     MODEL = "latest_long"
+        #     print("model:"+MODEL)
+        #     # 日本語対応なし -> vido
+        # else:
+        #     MODEL = "default"
+        #     print("model:"+MODEL)
+        MODEL = "latest_long"
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=RATE,
             language_code=language_code,
             # enableWordTimeOffsets = True,
-            model = MODEL,
-    
-            
+            model = MODEL,        
         )
 
         _streaming_config = speech.StreamingRecognitionConfig(

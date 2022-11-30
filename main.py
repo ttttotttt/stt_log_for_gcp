@@ -2,7 +2,7 @@
 # from logging import root
 import threading
 import tkinter 
-from tkinter import ttk, messagebox
+from tkinter import Image, ttk, messagebox
 from tkinter.constants import FALSE
 
 import time
@@ -13,15 +13,26 @@ from sqlalchemy import null
 import queue
 import os
 import logging
+from PIL import Image
+from PIL import ImageTk
 
 import recognition_for_gcp as stt
 import label_object as lo
 import csv_pyobjc
 
+import os
+import sys
+
 MIC_INDEX = 1#USER側の入力デバイスインデックス
 MIXER_INDEX = 2#PC側の入力デバイスインデックス
 
-SAVE_AUDIO = True #音源を保存するかしないか（ストレージ対策）
+# 絶対パスを取得
+authpath = os.path.abspath('pythontkinter-332305-a72c4cd62fa2.json')
+# returncode = os.system('set GOOGLE_APPLICATION_CREDENTIALS='+authpath)
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = authpath
+# print(returncode)
+
+SAVE_AUDIO = False #音源を保存するかしないか（ストレージ対策）
 DIR_NAME = "speech_to_text_2121040"
 AUDIO_PATH = DIR_NAME+"/AUDIO_FILE/"
 day = datetime.datetime.now().strftime('%Y-%m-%d')+"/"
@@ -45,12 +56,17 @@ if not os.path.exists(SETTING_PATH):
     f.close()
 
 co = csv_pyobjc.csv_pyobjc()
+
+ttsMIC = stt.Listen_print(MIC_INDEX,"USER", 1,AUDIO_DIR_PATH,LOG_DIR_PATH,SAVE_AUDIO)
+ttsMIXER = stt.Listen_print(MIXER_INDEX,"PC",0,AUDIO_DIR_PATH,LOG_DIR_PATH,SAVE_AUDIO)
+
+
 a = co.readCsv(SETTING_PATH)
 MIC_INDEX = a[0]
 MIXER_INDEX = a[1]
 
-ttsMIC = stt.Listen_print(MIC_INDEX,"USER", 1,AUDIO_DIR_PATH,LOG_DIR_PATH,SAVE_AUDIO)
-ttsMIXER = stt.Listen_print(MIXER_INDEX,"PC",0,AUDIO_DIR_PATH,LOG_DIR_PATH,SAVE_AUDIO)
+MIC_INDEX = ttsMIXER.USERINDEX
+MIXER_INDEX = ttsMIXER.PCINDEX
 
 num = 0 
 class Display_result():
@@ -131,13 +147,48 @@ class Display_result():
         self.option_window.wm_attributes("-topmost", True)
         self.option_window.geometry("300x300+"+str(int(ww/2-300/2))+"+"+str(int(self.wh/2-300/2)))
         self.option_window.title("Settings")
+
+        # op=lo.setting_gui()
             
         lfontsize = ttk.Label(self.option_window, text="学籍番号", wraplength=ww)
         # lfontsize.pack()
         self.studentNum = tkinter.Entry(self.option_window, width=20)
         self.studentNum.insert(tkinter.END, "b2222000")
-        # self.studentNum.pack()
+        """
+        canvas = tkinter.Canvas(self.option_window)
+        canvas.pack(expand = True, fill = tkinter.BOTH)
+        # キャンバスのサイズを取得
+        self.option_window.update() # Canvasのサイズを取得するため更新しておく
+        canvas_width = canvas.winfo_width()
+        canvas_height = canvas.winfo_height()
+        # 画像ファイルを開く（対応しているファイルフォーマットはPGM、PPM、GIF、PNG）
+        # photo_image = tkinter.PhotoImage(file = 'sys_sound_.png', master=self.option_window)
         
+        photo_image = Image.open('sys_sound_.png')
+        photo_image.resize((5, 5),Image.ANTIALIAS)
+        photo_image = ImageTk.PhotoImage(photo_image, master=self.option_window)
+        # canvas.place(x=100, y=350) 
+        
+        # 画像の描画
+        canvas.create_image(10, 10, image=photo_image)#表示画像データ)
+    
+        def next_img():
+            canvas.place(x=0, y=0)
+            # photo_image = tkinter.PhotoImage(file = 'sys_sound_.png', master=self.option_window)
+            photo_image = Image.open('sound_input_output.png')
+            photo_image.resize((5, 5),Image.ANTIALIAS)
+            photo_image =  ImageTk.PhotoImage(photo_image, master=self.option_window)
+            # photo_image = tkinter.PhotoImage(file = 'sound_input_output.png', master=self.option_window)
+            # 画像の描画
+            canvas.create_image(canvas_width / 2+100, canvas_height / 2, image=photo_image, anchor=tkinter.N)#表示画像データ)
+            # canvas.place(x=300, y=350) 
+        # # 「次に」ボタン
+        button_draw = tkinter.Button(self.option_window , text=u'消す',width=15)
+        button_draw.bind("<Button-1>", next_img)
+        button_draw.place(x=350,y=350)
+        # # self.studentNum.pack()
+        
+        """
         # ラベル
         lbl = tkinter.Label(self.option_window,text='USERのデバイスインデックス')
         self.label_m=tkinter.Label(self.option_window,text="接続デバイス")
@@ -221,6 +272,9 @@ class Display_result():
                     )
         
         # fontsiza_sv.pack(side=tkinter.LEFT)
+
+        # self.pc_sound_setting()
+        # self.option_window.mainloop()
         self.root.mainloop()
     """
     def schedule_s(self, event):    
@@ -229,7 +283,7 @@ class Display_result():
         # 定期実行したい操作をまとめた関数
         schedule.every(60).seconds.do(event) # 10分毎  
     """
-    
+
     def slider_scroll(self, event=0):
         '''スライダーを移動したとき'''
         self.scale_var.set(event)
